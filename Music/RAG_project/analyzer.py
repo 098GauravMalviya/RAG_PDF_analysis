@@ -6,6 +6,8 @@ from typing import List, Optional
 from enum import Enum
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
+import time
+import random
 
 # Load environment variables
 load_dotenv()
@@ -18,6 +20,31 @@ except ImportError:
     genai = None
     types = None
 
+def retry_with_backoff(max_retries=5, base_delay=2, max_delay=60):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    is_retryable = (
+                        "503" in str(e) or
+                        "UNAVAILABLE" in str(e) or
+                        "overloaded" in str(e).lower() or
+                        "429" in str(e)  # rate limit, worth retrying too
+                    )
+                    if not is_retryable or attempt == max_retries - 1:
+                        raise
+                    delay = min(base_delay * (2 ** attempt), max_delay)
+                    jitter = random.uniform(0, delay * 0.3)
+                    wait_time = delay + jitter
+                    print(f"[!] API overloaded (attempt {attempt+1}/{max_retries}). Retrying in {wait_time:.1f}s...")
+                    time.sleep(wait_time)
+                    last_exception = e
+            raise last_exception
+        return wrapper
+    return decorator
 # ==========================================
 # 1. Structured Data Models (Pydantic)
 # ==========================================
@@ -86,6 +113,17 @@ class TenderAnalyzer:
         
         # Initialize Google GenAI client
         self.client = genai.Client(api_key=api_key)
+    @retry_with_backoff(max_retries=5, base_delay=2, max_delay=60)
+    def _call_gemini(self, file_ref, prompt, model_name):
+        return self.client.models.generate_content(
+            model=model_name,
+            contents=[file_ref, prompt],
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=BiddingTemplate,
+                temperature=0.1,
+            )
+        )
 
     def analyze_tender(self, pdf_path: str, lt_capabilities: str) -> BiddingTemplate:
         """
