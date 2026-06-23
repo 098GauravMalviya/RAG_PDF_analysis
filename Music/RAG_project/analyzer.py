@@ -155,15 +155,7 @@ Instructions:
         model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
         print(f"[*] Processing document with {model_name} (Multimodal Analyzer)...")
         try:
-            response = self.client.models.generate_content(
-                model=model_name,
-                contents=[file_ref, prompt],
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=BiddingTemplate,
-                    temperature=0.1,  # Low temperature for highly deterministic analytical output
-                )
-            )
+            response = self._call_gemini(file_ref, prompt, model_name)
             
             # Parse the response text as JSON and load it into our Pydantic model
             raw_json = response.text
