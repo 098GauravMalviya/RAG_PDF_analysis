@@ -70,6 +70,22 @@ class FinancialConstraint(BaseModel):
     value: str = Field(description="The financial value or percentage required.")
     citation: str = Field(description="Exact page number and section clause where this constraint is located.")
 
+class TenderRequirements(BaseModel):
+    tender_id: str = Field(description="The unique Tender Identification Number / Reference Number.")
+    issuing_authority: str = Field(description="The government department or authority issuing the tender.")
+    scope_of_work: str = Field(description="Brief description of the scope of work and requirements.")
+    submission_deadline: str = Field(description="Deadline date and time for bid submission.")
+
+    technical_specifications: List[TechnicalSpecification] = Field(
+        description="Key technical specifications and testing standards extracted from the document."
+    )
+    financial_constraints: List[FinancialConstraint] = Field(
+        description="Financial requirements, bank guarantees, and bid values."
+    )
+    eligibility_criteria: List[str] = Field(
+        description="Summary of experience, licensing, and certification requirements."
+    )
+
 class FeasibilityItem(BaseModel):
     parameter: str = Field(description="The criterion analyzed, e.g., 'Turnover Limit', 'Military Testing Standard compliance', 'Delivery Timeline'.")
     tender_requirement: str = Field(description="The requirement as stated in the tender document.")
@@ -114,16 +130,45 @@ class TenderAnalyzer:
         # Initialize Google GenAI client
         self.client = genai.Client(api_key=api_key)
     @retry_with_backoff(max_retries=5, base_delay=2, max_delay=60)
-    def _call_gemini(self, file_ref, prompt, model_name):
+    def _call_gemini(self, contents, schema, model_name):
         return self.client.models.generate_content(
             model=model_name,
-            contents=[file_ref, prompt],
+            contents=contents,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
-                response_schema=BiddingTemplate,
+                response_schema=schema,
                 temperature=0.1,
             )
         )
+    def extract_requirements(self, file_ref) -> TenderRequirements:
+        """
+        Stage 1: Pure extraction. No feasibility judgment, no comparison —
+        just pulls the raw facts out of the tender document.
+        """
+        prompt = """
+You are a meticulous document analyst. Your ONLY job is extraction — do not
+evaluate, judge, or compare anything against any company's capabilities.
+
+Read the attached defense tender document and extract:
+1. Tender ID, issuing authority, scope of work, submission deadline.
+2. Every technical specification and testing/military standard mentioned
+   (e.g., MIL-STD, IS, DEF-STAN), each with an exact page + clause citation.
+3. Every financial constraint (EMD, PBG, ceiling budget, etc.), each with
+   an exact page + clause citation.
+4. Every eligibility criterion (turnover, past performance, certifications,
+   security clearance, etc.).
+
+Cross-reference scattered clauses where relevant (e.g., a spec on one page
+that is qualified by a standard defined elsewhere) so nothing is missed.
+Do not add commentary, opinions, or feasibility assessments — extraction only.
+"""
+        model_name = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+        response = self._call_gemini(
+            contents=[file_ref, prompt],
+            schema=TenderRequirements,
+            model_name=model_name,
+        )
+        return TenderRequirements.model_validate_json(response.text)
 
     def analyze_tender(self, pdf_path: str, lt_capabilities: str) -> BiddingTemplate:
         """

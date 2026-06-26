@@ -1,6 +1,6 @@
 import os
 import json
-from analyzer import BiddingTemplate, print_terminal_scorecard, TenderAnalyzer
+from analyzer import BiddingTemplate,TenderRequirements, print_terminal_scorecard, TenderAnalyzer
 
 MOCK_CAPABILITIES = """
 - Annual Turnover: $600 Million USD
@@ -128,5 +128,68 @@ def main():
         except Exception as e:
             print(f"[!] Live API execution failed: {e}")
 
+
+def test_stage1_extraction():
+    """
+    Standalone test for Stage 1 (extraction only).
+    Verifies extract_requirements() works against a real document before
+    Stage 2/3 are wired in.
+    """
+    print("="*60)
+    print(" STAGE 1: EXTRACTION-ONLY TEST")
+    print("="*60)
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        print("[!] GEMINI_API_KEY not found in environment.")
+        print("[i] Set it in your .env file before running this test.")
+        return
+
+    pdf_path = "sample_tender.md"  # swap for a real .pdf once you have one
+    if not os.path.exists(pdf_path):
+        print(f"[!] Test file not found: {pdf_path}")
+        return
+
+    try:
+        analyzer = TenderAnalyzer()
+
+        print(f"[*] Uploading {pdf_path} to Gemini...")
+        file_ref = analyzer.client.files.upload(file=pdf_path)
+        print(f"[+] Upload complete. File ID: {file_ref.name}")
+
+        print("[*] Running extract_requirements() (Stage 1)...")
+        result = analyzer.extract_requirements(file_ref)
+
+        print("\n" + "#"*60)
+        print(" STAGE 1 RESULT")
+        print("#"*60)
+        print(f"Tender ID: {result.tender_id}")
+        print(f"Issuing Authority: {result.issuing_authority}")
+        print(f"Scope of Work: {result.scope_of_work}")
+        print(f"Submission Deadline: {result.submission_deadline}")
+
+        print(f"\nTechnical Specifications ({len(result.technical_specifications)}):")
+        for spec in result.technical_specifications:
+            print(f"  - {spec.parameter}: {spec.requirement} ({spec.citation})")
+
+        print(f"\nFinancial Constraints ({len(result.financial_constraints)}):")
+        for fin in result.financial_constraints:
+            print(f"  - {fin.parameter}: {fin.value} ({fin.citation})")
+
+        print(f"\nEligibility Criteria ({len(result.eligibility_criteria)}):")
+        for crit in result.eligibility_criteria:
+            print(f"  - {crit}")
+
+        print("\n[+] Stage 1 test PASSED — extraction succeeded and validated against schema.")
+
+
+    except Exception as e:
+        print(f"\n[!] Stage 1 test FAILED: {e}")
+    finally:
+            if file_ref:
+                analyzer.client.files.delete(name=file_ref.name)
+                print("[*] Cleaned up uploaded file from Gemini storage.")
+
+
 if __name__ == "__main__":
-    main()
+    test_stage1_extraction()

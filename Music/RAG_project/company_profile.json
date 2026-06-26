@@ -1,0 +1,35 @@
+{
+  "company_name": "Larsen & Toubro (L&T) Defence",
+  "financials": {
+    "annual_turnover_usd": 600000000.0,
+    "max_emd_guarantee_usd": 2000000.0
+  },
+  "certifications": [
+    {
+      "name": "ISO 9001",
+      "expiry_date": "2027-12-31",
+      "status": "ACTIVE"
+    },
+    {
+      "name": "AS9100",
+      "expiry_date": "2028-06-30",
+      "status": "ACTIVE"
+    },
+    {
+      "name": "ISO 14001",
+      "expiry_date": "2027-09-30",
+      "status": "ACTIVE"
+    }
+  ],
+  "capabilities": {
+    "standard_lead_time_months": 14,
+    "security_clearance_level": "Secret",
+    "defense_experience_years": 15,
+    "past_projects_5yr": 4,
+    "testing_facilities": [
+      "environmental chambers (-40C to +85C)",
+      "vibe tables up to 10g",
+      "EMI/EMC compliance chamber"
+    ]
+  }
+}
