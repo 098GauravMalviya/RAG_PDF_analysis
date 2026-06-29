@@ -1,195 +1,52 @@
 import os
 import json
-from analyzer import BiddingTemplate,TenderRequirements, print_terminal_scorecard, TenderAnalyzer
-
-MOCK_CAPABILITIES = """
-- Annual Turnover: $600 Million USD
-- Certification: ISO 9001, AS9100 Rev D
-- Experience: Executed 4 large-scale defense supply contracts in last 5 years.
-- Security Clearance: Valid Secret level.
-- EMD Limit: Max EMD bank guarantee available is $2 Million USD.
-"""
-
-MOCK_RESPONSE_DATA = {
-  "tender_id": "TND-MOD-2026-8923",
-  "issuing_authority": "Ministry of Defence (MoD), Indian Govt.",
-  "scope_of_work": "Supply of fifty (50) mobile launcher assemblies for tactical missile systems.",
-  "submission_deadline": "August 30, 2026",
-  "technical_specifications": [
-    {
-      "parameter": "Operating Temperature",
-      "requirement": "-30°C to +75°C",
-      "citation": "Page 1, Clause 2.1.1"
-    },
-    {
-      "parameter": "Environmental Standard",
-      "requirement": "MIL-STD-810H vibration and high-humidity certified",
-      "citation": "Page 1, Clause 2.1.2"
-    },
-    {
-      "parameter": "Quality Assurance Standard",
-      "requirement": "AS9100 Rev D certification required",
-      "citation": "Page 1, Clause 2.2.2"
-    }
-  ],
-  "financial_constraints": [
-    {
-      "parameter": "Earnest Money Deposit (EMD)",
-      "value": "$1.5 Million USD",
-      "citation": "Page 1, Clause 3.1"
-    },
-    {
-      "parameter": "Performance Bank Guarantee (PBG)",
-      "value": "10% of contract value",
-      "citation": "Page 1, Clause 3.2"
-    },
-    {
-      "parameter": "Ceiling Budget",
-      "value": "$12.5 Million USD",
-      "citation": "Page 1, Clause 3.3"
-    }
-  ],
-  "eligibility_criteria": [
-    "Average annual turnover of at least $500 Million USD over last 3 years.",
-    "Successfully manufactured and delivered at least three defense assemblies in the last 5 years.",
-    "Valid Secret-level security clearance from Department of Defence."
-  ],
-  "feasibility_scorecard": [
-    {
-      "parameter": "Turnover Requirement",
-      "tender_requirement": "Min $500 Million USD",
-      "lt_capability": "L&T average annual turnover is $600 Million USD.",
-      "status": "COMPLIANT",
-      "gap_analysis": "Compliant. Exceeds requirement by $100 Million USD.",
-      "mitigation_action": None,
-      "citation": "Page 1, Clause 4.1"
-    },
-    {
-      "parameter": "Earnest Money Deposit (EMD)",
-      "tender_requirement": "$1.5 Million USD",
-      "lt_capability": "L&T limit is $2.0 Million USD.",
-      "status": "COMPLIANT",
-      "gap_analysis": "EMD value is well within L&T's maximum bank guarantee capacity.",
-      "mitigation_action": None,
-      "citation": "Page 1, Clause 3.1"
-    },
-    {
-      "parameter": "Testing Standards",
-      "tender_requirement": "MIL-STD-810H vibration and humidity testing",
-      "lt_capability": "L&T has environmental chambers and vibration tables up to 10g.",
-      "status": "COMPLIANT",
-      "gap_analysis": "Compliant. L&T's in-house capabilities meet the testing parameters.",
-      "mitigation_action": None,
-      "citation": "Page 1, Clause 2.1.2"
-    }
-  ],
-  "recommendation": "GO",
-  "recommendation_rationale": "L&T is fully compliant with all major technical, financial, and eligibility requirements. The $12.5M ceiling budget provides a healthy margin above L&T's operating targets, and the in-house test rigs minimize outsourcing risks."
-}
+import sys
+from analyzer import TenderAnalyzer, BiddingTemplate, print_terminal_scorecard
 
 def main():
     print("="*60)
-    print(" L&T DEFENCE TENDER ANALYZER: TEST & VALIDATION")
+    print(" L&T DEFENCE HYBRID TENDER ANALYZER: END-TO-END TEST")
     print("="*60)
     
     api_key = os.getenv("GEMINI_API_KEY")
-    
-    # 1. Validation Test: Pydantic Schema Parsing
-    print("[*] Test 1: Validating Pydantic Schema parsing & strict formatting...")
-    try:
-        validated_template = BiddingTemplate.model_validate(MOCK_RESPONSE_DATA)
-        print("[+] Validation SUCCESS: Pydantic parsed mock data perfectly.")
-        
-        # Test terminal formatting printing
-        print("[*] Displaying sample terminal scorecard output:")
-        print_terminal_scorecard(validated_template)
-    except Exception as e:
-        print(f"[!] Validation FAILED: {e}")
-        return
-
-    # 2. Live API Test
-    print("[*] Test 2: Checking for live Gemini API configurations...")
     if not api_key:
         print("[!] GEMINI_API_KEY not found in environment.")
-        print("[i] To run live validation on the sample tender document:")
-        print("    1. Rename '.env.example' to '.env'")
-        print("    2. Populate your GEMINI_API_KEY in '.env'")
-        print("    3. Run: python analyzer.py --pdf sample_tender.md")
-    else:
-        print("[+] GEMINI_API_KEY found! Launching live API test on sample_tender.md...")
-        try:
-            analyzer = TenderAnalyzer()
-            result = analyzer.analyze_tender("sample_tender.md", MOCK_CAPABILITIES)
-            
-            print("\n" + "#"*40)
-            print(" LIVE API RESULT SUCCESS")
-            print("#"*40)
-            print_terminal_scorecard(result)
-        except Exception as e:
-            print(f"[!] Live API execution failed: {e}")
-
-
-def test_stage1_extraction():
-    """
-    Standalone test for Stage 1 (extraction only).
-    Verifies extract_requirements() works against a real document before
-    Stage 2/3 are wired in.
-    """
-    print("="*60)
-    print(" STAGE 1: EXTRACTION-ONLY TEST")
-    print("="*60)
-
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        print("[!] GEMINI_API_KEY not found in environment.")
-        print("[i] Set it in your .env file before running this test.")
+        print("[i] Make sure '.env' file contains your key.")
         return
 
-    pdf_path = "sample_tender.md"  # swap for a real .pdf once you have one
+    pdf_path = "sample_tender.md"
+    profile_path = "company_profile.json"
+    output_path = "bidding_template_output.json"
+
+    # Check file exists
     if not os.path.exists(pdf_path):
         print(f"[!] Test file not found: {pdf_path}")
+        return
+    if not os.path.exists(profile_path):
+        print(f"[!] L&T Profile database not found: {profile_path}")
         return
 
     try:
         analyzer = TenderAnalyzer()
+        print("[*] Launching 3-Stage Hybrid Decision Engine...")
+        print("    Stage 1: LLM Extraction")
+        print("    Stage 2: Deterministic Python rules matching")
+        print("    Stage 3: LLM Heuristic analysis & synthesis\n")
+        
+        result = analyzer.analyze_tender(pdf_path, profile_path)
+        
+        # Save output JSON
+        with open(output_path, "w") as f:
+            json.dump(result.model_dump(), f, indent=2)
+        print(f"[+] Output JSON saved successfully to: {output_path}")
 
-        print(f"[*] Uploading {pdf_path} to Gemini...")
-        file_ref = analyzer.client.files.upload(file=pdf_path)
-        print(f"[+] Upload complete. File ID: {file_ref.name}")
-
-        print("[*] Running extract_requirements() (Stage 1)...")
-        result = analyzer.extract_requirements(file_ref)
-
-        print("\n" + "#"*60)
-        print(" STAGE 1 RESULT")
-        print("#"*60)
-        print(f"Tender ID: {result.tender_id}")
-        print(f"Issuing Authority: {result.issuing_authority}")
-        print(f"Scope of Work: {result.scope_of_work}")
-        print(f"Submission Deadline: {result.submission_deadline}")
-
-        print(f"\nTechnical Specifications ({len(result.technical_specifications)}):")
-        for spec in result.technical_specifications:
-            print(f"  - {spec.parameter}: {spec.requirement} ({spec.citation})")
-
-        print(f"\nFinancial Constraints ({len(result.financial_constraints)}):")
-        for fin in result.financial_constraints:
-            print(f"  - {fin.parameter}: {fin.value} ({fin.citation})")
-
-        print(f"\nEligibility Criteria ({len(result.eligibility_criteria)}):")
-        for crit in result.eligibility_criteria:
-            print(f"  - {crit}")
-
-        print("\n[+] Stage 1 test PASSED — extraction succeeded and validated against schema.")
-
+        # Display formatted terminal scorecard
+        print_terminal_scorecard(result)
+        print("[+] End-to-end hybrid validation test PASSED.")
 
     except Exception as e:
-        print(f"\n[!] Stage 1 test FAILED: {e}")
-    finally:
-            if file_ref:
-                analyzer.client.files.delete(name=file_ref.name)
-                print("[*] Cleaned up uploaded file from Gemini storage.")
-
+        print(f"\n[!] Test execution failed: {e}", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == "__main__":
-    test_stage1_extraction()
+    main()
