@@ -112,8 +112,8 @@ st.markdown("""
 BACKEND_URL = "http://127.0.0.1:8000"
 
 # Title banner
-st.title("🛡️ L&T Defence: Bidding Compliance Portal")
-st.caption("3-Stage Hybrid Decision Engine for Defense Tender Verification")
+st.title("🛡️Bidding Compliance Portal")
+st.caption("3-Stage Hybrid Decision Engine for Tender Verification")
 
 # Main tabs navigation
 tab_dashboard, tab_profile = st.tabs(["📊 Tender Analysis Dashboard", "⚙️ L&T Company Profile"])

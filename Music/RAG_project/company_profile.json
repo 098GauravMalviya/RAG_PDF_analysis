@@ -1,13 +1,13 @@
 {
-  "company_name": "Larsen & Toubro (L&T) Defence",
+  "company_name": "Larsen & Toubro (L&T) Shipbuilding Division",
   "financials": {
-    "annual_turnover_usd": 600000000.0,
-    "max_emd_guarantee_usd": 2000000.0
+    "annual_turnover_usd": 850000000.0,
+    "max_emd_guarantee_usd": 15000000.0
   },
   "certifications": [
     {
       "name": "ISO 9001",
-      "expiry_date": "2027-12-31",
+      "expiry_date": "2028-12-31",
       "status": "ACTIVE"
     },
     {
@@ -19,17 +19,24 @@
       "name": "ISO 14001",
       "expiry_date": "2027-09-30",
       "status": "ACTIVE"
+    },
+    {
+      "name": "ANEP-77",
+      "expiry_date": "2029-01-01",
+      "status": "ACTIVE"
     }
   ],
   "capabilities": {
-    "standard_lead_time_months": 14,
+    "standard_lead_time_months": 24,
     "security_clearance_level": "Secret",
-    "defense_experience_years": 15,
-    "past_projects_5yr": 4,
+    "defense_experience_years": 18,
+    "past_projects_5yr": 6,
     "testing_facilities": [
-      "environmental chambers (-40C to +85C)",
-      "vibe tables up to 10g",
-      "EMI/EMC compliance chamber"
+      "Kattupalli Mega Shipyard (2.1 km waterfront)",
+      "Shiplift System (150m x 46m, 20,000-ton capacity)",
+      "Vibration and Acoustic trials instrumentation",
+      "EMI/EMC compliance testing lab",
+      "Sea trial support infrastructure in Bay of Bengal"
     ]
   }
 }
