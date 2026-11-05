@@ -203,7 +203,7 @@ st.set_page_config(
     page_title="L&T Defence - Tender Dashboard",
     page_icon="🛡️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # Custom Premium Styling injection
@@ -262,31 +262,13 @@ if not os.path.exists(PROFILE_PATH):
             PROFILE_PATH = candidate
             break
 
-# ==========================================
-# Sidebar Settings
-# ==========================================
-with st.sidebar:
-    st.header("⚙️ Configuration")
-    
-    # Try discovering pre-configured key from env or st.secrets
-    default_key = os.getenv("GEMINI_API_KEY", "")
-    if not default_key:
-        try:
-            if hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
-                default_key = st.secrets["GEMINI_API_KEY"]
-        except Exception:
-            default_key = ""
-            
-    api_key_input = st.text_input(
-        "🔑 Gemini API Key",
-        value=default_key,
-        type="password",
-        help="Enter your Google Gemini API key from https://aistudio.google.com/. If configured in Streamlit Secrets or .env, it loads automatically."
-    )
-    if not api_key_input:
-        st.warning("⚠️ Enter a Gemini API Key to enable tender analysis.")
-    else:
-        st.success("✅ API Key loaded.")
+# Silently populate environment variable from Streamlit Secrets if available
+if not os.getenv("GEMINI_API_KEY"):
+    try:
+        if hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
+            os.environ["GEMINI_API_KEY"] = st.secrets["GEMINI_API_KEY"]
+    except Exception:
+        pass
 
 st.title("🛡️ Bidding Compliance Portal (Serverless)")
 st.caption("3-Stage Hybrid Decision Engine for Tender Verification")
@@ -317,15 +299,10 @@ with tab_dashboard:
                 status_box.markdown("**Pipeline State:** `Stage 1: Extracting raw specifications...`")
                 progress_bar.progress(25)
                 
-                # Set environment variable so TenderAnalyzer can pick it up under any circumstance
-                if api_key_input:
-                    os.environ["GEMINI_API_KEY"] = api_key_input
-                
                 try:
-                    analyzer = TenderAnalyzer(api_key=api_key_input or None)
-                except TypeError:
-                    # In case an older cached module version of analyzer is in memory
                     analyzer = TenderAnalyzer()
+                except Exception as e:
+                    raise e
                 
                 # Upload to Gemini File API
                 file_ref = analyzer.client.files.upload(file=temp_filename)
