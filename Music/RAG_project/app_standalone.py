@@ -306,7 +306,15 @@ with tab_dashboard:
                 status_box.markdown("**Pipeline State:** `Stage 1: Extracting raw specifications...`")
                 progress_bar.progress(25)
                 
-                analyzer = TenderAnalyzer(api_key=api_key_input or None)
+                # Set environment variable so TenderAnalyzer can pick it up under any circumstance
+                if api_key_input:
+                    os.environ["GEMINI_API_KEY"] = api_key_input
+                
+                try:
+                    analyzer = TenderAnalyzer(api_key=api_key_input or None)
+                except TypeError:
+                    # In case an older cached module version of analyzer is in memory
+                    analyzer = TenderAnalyzer()
                 
                 # Upload to Gemini File API
                 file_ref = analyzer.client.files.upload(file=temp_filename)
