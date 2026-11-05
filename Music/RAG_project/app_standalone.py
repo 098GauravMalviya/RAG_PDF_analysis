@@ -249,7 +249,18 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Local database file
-PROFILE_PATH = "company_profile.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROFILE_PATH = os.path.join(BASE_DIR, "company_profile.json")
+
+# Robust fallback path discovery if launched from another working directory
+if not os.path.exists(PROFILE_PATH):
+    for candidate in [
+        os.path.join(os.getcwd(), "Music", "RAG_project", "company_profile.json"),
+        os.path.join(os.getcwd(), "company_profile.json"),
+    ]:
+        if os.path.exists(candidate):
+            PROFILE_PATH = candidate
+            break
 
 # ==========================================
 # Sidebar Settings

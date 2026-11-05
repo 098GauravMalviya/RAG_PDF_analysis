@@ -435,7 +435,11 @@ Instructions:
         if not os.path.exists(pdf_path):
             raise FileNotFoundError(f"Tender file not found at: {pdf_path}")
         if not os.path.exists(profile_path):
-            raise FileNotFoundError(f"Company profile not found at: {profile_path}")
+            alt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.path.basename(profile_path))
+            if os.path.exists(alt_path):
+                profile_path = alt_path
+            else:
+                raise FileNotFoundError(f"Company profile not found at: {profile_path}")
 
         # Load profile
         with open(profile_path, "r") as f:
