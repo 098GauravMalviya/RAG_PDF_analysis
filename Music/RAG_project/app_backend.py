@@ -237,13 +237,16 @@ def build_docx_report(result: BiddingTemplate, filepath: str):
 # ==========================================
 def run_analysis_task(task_id: str, file_path: str, profile_path: str):
     """Background worker method for running 3-stage analysis."""
-    analysis_tasks[task_id]["status"] = "Extracting Specs (Stage 1)..."
+    analysis_tasks[task_id]["status"] = "Initiating analysis engine..."
     try:
         analyzer = TenderAnalyzer()
         
-        # Run stage 1-3 full engine
-        analysis_tasks[task_id]["status"] = "Running Compliance Engine (Stage 2 & 3)..."
-        result = analyzer.analyze_tender(file_path, profile_path)
+        def update_progress(msg: str):
+            analysis_tasks[task_id]["status"] = msg
+            print(f"[{task_id}] {msg}")
+            
+        # Run stage 1-3 full engine with live progress callbacks
+        result = analyzer.analyze_tender(file_path, profile_path, progress_callback=update_progress)
         
         # Save results locally in memory and disk
         analysis_tasks[task_id]["status"] = "Completed"

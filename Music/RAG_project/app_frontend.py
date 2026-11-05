@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import json
 import time
+import os
 
 # ==========================================
 # 0. Global Setup & Design Styling
@@ -109,7 +110,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-BACKEND_URL = "http://127.0.0.1:8000"
+BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
 
 # Title banner
 st.title("🛡️Bidding Compliance Portal")
@@ -145,8 +146,9 @@ with tab_dashboard:
                         
                         completed = False
                         attempts = 0
+                        max_attempts = 300  # Allows up to 10 minutes for large tenders
                         
-                        while not completed and attempts < 120:
+                        while not completed and attempts < max_attempts:
                             status_resp = requests.get(f"{BACKEND_URL}/status/{task_id}")
                             if status_resp.status_code == 200:
                                 status_data = status_resp.json()
@@ -158,19 +160,21 @@ with tab_dashboard:
                                 if status == "Completed":
                                     completed = True
                                     progress_bar.progress(100)
-                                    status_box.success("🎉 Pipeline Completed! Drawing Scorecard...")
+                                    status_box.success("🎉 Pipeline Completed! Rendering Scorecard...")
                                 elif status == "Failed":
                                     completed = True
                                     status_box.error(f"❌ Analysis failed: {error}")
                                     st.stop()
                                 else:
-                                    # Update progress increments based on string clues
-                                    if "Extracting" in status:
-                                        progress_bar.progress(25)
-                                    elif "Rules" in status or "Deterministic" in status:
-                                        progress_bar.progress(60)
-                                    else:
-                                        progress_bar.progress(85)
+                                    # Update progress increments based on live status string
+                                    if "Uploading" in status:
+                                        progress_bar.progress(15)
+                                    elif "Stage 1" in status or "Extracting" in status:
+                                        progress_bar.progress(40)
+                                    elif "Stage 2" in status or "Deterministic" in status:
+                                        progress_bar.progress(70)
+                                    elif "Stage 3" in status or "Synthesizing" in status or "Evaluating" in status:
+                                        progress_bar.progress(88)
                                         
                             time.sleep(2)
                             attempts += 1
@@ -182,6 +186,9 @@ with tab_dashboard:
                                 result = result_resp.json()
                                 st.session_state["analysis_result"] = result
                                 st.session_state["task_id"] = task_id
+                                st.rerun()
+                        elif not completed:
+                            status_box.error("⏳ Analysis timed out on the frontend. The backend may still be processing a large document.")
                                 
                     else:
                         st.error(f"Failed to submit file to backend: {response.text}")

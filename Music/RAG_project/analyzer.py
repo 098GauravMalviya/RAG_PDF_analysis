@@ -21,7 +21,7 @@ except ImportError:
     genai = None
     types = None
 
-def retry_with_backoff(max_retries=5, base_delay=2, max_delay=60):
+def retry_with_backoff(max_retries=3, base_delay=2, max_delay=30):
     def decorator(func):
         def wrapper(*args, **kwargs):
             last_exception = None
@@ -29,18 +29,24 @@ def retry_with_backoff(max_retries=5, base_delay=2, max_delay=60):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
+                    err_str = str(e).lower()
+                    # Daily quota exhaustion cannot be fixed by immediate retries; fail immediately to trigger fallback
+                    if "per day" in err_str or "daily" in err_str or "quota exceeded" in err_str:
+                        raise e
+                    
                     is_retryable = (
                         "503" in str(e) or
-                        "UNAVAILABLE" in str(e) or
-                        "overloaded" in str(e).lower() or
-                        "429" in str(e)  # rate limit, worth retrying too
+                        "unavailable" in err_str or
+                        "overloaded" in err_str or
+                        "resource_exhausted" in err_str or
+                        "429" in str(e)
                     )
                     if not is_retryable or attempt == max_retries - 1:
                         raise
                     delay = min(base_delay * (2 ** attempt), max_delay)
                     jitter = random.uniform(0, delay * 0.3)
                     wait_time = delay + jitter
-                    print(f"[!] API overloaded (attempt {attempt+1}/{max_retries}). Retrying in {wait_time:.1f}s...")
+                    print(f"[!] API busy (attempt {attempt+1}/{max_retries}). Retrying in {wait_time:.1f}s...")
                     time.sleep(wait_time)
                     last_exception = e
             raise last_exception
@@ -203,8 +209,8 @@ class TenderAnalyzer:
         # Initialize Google GenAI client
         self.client = genai.Client(api_key=api_key)
 
-    @retry_with_backoff(max_retries=5, base_delay=2, max_delay=60)
-    def _call_gemini(self, contents, schema, model_name):
+    @retry_with_backoff(max_retries=3, base_delay=2, max_delay=30)
+    def _call_gemini_single(self, contents, schema, model_name):
         return self.client.models.generate_content(
             model=model_name,
             contents=contents,
@@ -215,21 +221,43 @@ class TenderAnalyzer:
             )
         )
 
+    def _call_gemini(self, contents, schema, model_name):
+        # Fallback chain: requested model -> gemini-3.5-flash -> gemini-3.5-flash-lite -> gemini-flash-lite-latest
+        models_to_try = [model_name]
+        for alt in ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-flash-lite-latest"]:
+            if alt not in models_to_try:
+                models_to_try.append(alt)
+                
+        last_err = None
+        for m in models_to_try:
+            try:
+                print(f"[*] Invoking model: {m}...")
+                return self._call_gemini_single(contents, schema, m)
+            except Exception as e:
+                last_err = e
+                err_msg = str(e).lower()
+                if "429" in str(e) or "resource_exhausted" in err_msg or "quota" in err_msg or "503" in str(e) or "unavailable" in err_msg or "overload" in err_msg or "404" in str(e):
+                    print(f"[!] Model {m} reached quota/busy ({type(e).__name__}). Trying fallback model...")
+                    continue
+                raise e
+        raise last_err
+
     def extract_requirements(self, file_ref) -> TenderRequirements:
         """
         Stage 1: Pure extraction. Pulls raw parameters out of the PDF tender.
         """
         prompt = """
-You are a meticulous document analyst. Your ONLY job is extraction — do not
+You are a meticulous military contracts analyst. Your job is pure extraction — do not
 evaluate, judge, or compare anything against any company's capabilities.
 
-Read the attached defense tender document and extract:
+Read the attached defense tender / Statement of Requirements (SoR) document and extract:
 1. Tender ID, issuing authority, scope of work, submission deadline.
-2. Every technical specification and testing/military standard mentioned (e.g., MIL-STD, IS, DEF-STAN), each with an exact page + clause citation.
-3. Every financial constraint (EMD, PBG, ceiling budget, etc.), each with an exact page + clause citation.
-4. Every eligibility criterion (turnover, past performance, certifications, security clearance, etc.).
+2. The major technical specifications and testing/military standards (e.g. MIL-STD, DEF-STAN, ISO, radar/sensors, endurance, operational limits).
+   Focus on the top critical performance indicators (KPIs) and compliance parameters (up to 25-30 key specifications).
+3. Every financial constraint (EMD, PBG, ceiling budget, turnover, etc.), each with an exact page + clause citation.
+4. Every eligibility criterion (past performance, certifications, security clearance, etc.).
 
-Cross-reference scattered clauses where relevant (e.g., a spec on one page that is qualified by a standard defined elsewhere) so nothing is missed.
+For every extracted item, cite the exact clause, section, or page reference in the citation field.
 Do not add commentary, opinions, or feasibility assessments — extraction only.
 """
         model_name = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
@@ -388,7 +416,7 @@ Instructions:
         )
         return BiddingTemplate.model_validate_json(response.text)
 
-    def analyze_tender(self, pdf_path: str, profile_path: str) -> BiddingTemplate:
+    def analyze_tender(self, pdf_path: str, profile_path: str, progress_callback=None) -> BiddingTemplate:
         """
         Runs the full 3-Stage pipeline end-to-end.
         """
@@ -403,20 +431,28 @@ Instructions:
         profile = CompanyProfile.model_validate(profile_data)
 
         # Upload document
+        if progress_callback:
+            progress_callback("Uploading tender document to engine...")
         print(f"[*] Uploading tender document: {pdf_path}...")
         file_ref = self.client.files.upload(file=pdf_path)
         print(f"[+] Upload complete. File ID: {file_ref.name}")
 
         try:
             # Stage 1: Extraction
+            if progress_callback:
+                progress_callback("Stage 1/3: Multimodal Extraction of Tender Specifications...")
             print("[*] Running Stage 1: Multimodal LLM Extraction...")
             requirements = self.extract_requirements(file_ref)
 
             # Stage 2: Deterministic Python matching
+            if progress_callback:
+                progress_callback("Stage 2/3: Deterministic Rule Verification (Python Gatekeeper)...")
             print("[*] Running Stage 2: Deterministic Engine Python...")
             det_report = self.run_deterministic_checks(requirements, profile)
 
             # Stage 3: Heuristic Reasoning & Synthesis
+            if progress_callback:
+                progress_callback("Stage 3/3: Evaluating Engineering Feasibility & Synthesizing Scorecard...")
             print("[*] Running Stage 3: Heuristic Analysis LLM...")
             bidding_template = self.generate_bidding_template(file_ref, requirements, det_report, profile)
             
