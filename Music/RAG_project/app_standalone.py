@@ -251,6 +251,32 @@ st.markdown("""
 # Local database file
 PROFILE_PATH = "company_profile.json"
 
+# ==========================================
+# Sidebar Settings
+# ==========================================
+with st.sidebar:
+    st.header("⚙️ Configuration")
+    
+    # Try discovering pre-configured key from env or st.secrets
+    default_key = os.getenv("GEMINI_API_KEY", "")
+    if not default_key:
+        try:
+            if hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
+                default_key = st.secrets["GEMINI_API_KEY"]
+        except Exception:
+            default_key = ""
+            
+    api_key_input = st.text_input(
+        "🔑 Gemini API Key",
+        value=default_key,
+        type="password",
+        help="Enter your Google Gemini API key from https://aistudio.google.com/. If configured in Streamlit Secrets or .env, it loads automatically."
+    )
+    if not api_key_input:
+        st.warning("⚠️ Enter a Gemini API Key to enable tender analysis.")
+    else:
+        st.success("✅ API Key loaded.")
+
 st.title("🛡️ Bidding Compliance Portal (Serverless)")
 st.caption("3-Stage Hybrid Decision Engine for Tender Verification")
 
@@ -280,7 +306,7 @@ with tab_dashboard:
                 status_box.markdown("**Pipeline State:** `Stage 1: Extracting raw specifications...`")
                 progress_bar.progress(25)
                 
-                analyzer = TenderAnalyzer()
+                analyzer = TenderAnalyzer(api_key=api_key_input or None)
                 
                 # Upload to Gemini File API
                 file_ref = analyzer.client.files.upload(file=temp_filename)

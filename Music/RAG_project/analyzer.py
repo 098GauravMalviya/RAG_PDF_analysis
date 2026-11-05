@@ -194,16 +194,26 @@ def parse_monetary_value(val_str: str) -> float:
 # ==========================================
 
 class TenderAnalyzer:
-    def __init__(self):
+    def __init__(self, api_key: Optional[str] = None):
         if genai is None or types is None:
             raise RuntimeError(
                 "Google GenAI SDK is not installed. Please run: pip install -r requirements.txt"
             )
         
-        api_key = os.getenv("GEMINI_API_KEY")
+        # Check explicit parameter, environment variable, or Streamlit secrets
+        if not api_key:
+            api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            try:
+                import streamlit as st
+                if hasattr(st, "secrets") and "GEMINI_API_KEY" in st.secrets:
+                    api_key = st.secrets["GEMINI_API_KEY"]
+            except Exception:
+                pass
+
         if not api_key:
             raise ValueError(
-                "GEMINI_API_KEY environment variable is not set. Please set it in your .env file."
+                "GEMINI_API_KEY is not set. Please provide it via the sidebar, Streamlit Secrets, or a .env file."
             )
         
         # Initialize Google GenAI client
